@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { analyzePreferences, createPreferenceProfile } from "@/lib/preferences-analyzer"
+import { createPreferenceProfile } from "@/lib/preferences-analyzer"
 import { getTopDestinations } from "@/lib/destination-matcher"
-import { ImageMetadata } from "@/lib/image-generator"
+import { createPreferenceProfileFromRatings } from "@/lib/rating-preferences"
 import { generateSeed, shuffleArrayWithSeed } from "@/lib/seed-randomizer"
 
 // Force dynamic rendering - disable caching
@@ -11,27 +11,26 @@ export const revalidate = 0
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { imageMetadata = [], language = "en", seed = null } = body
+    const { imageRatings = {}, language = "en", seed = null } = body
 
     // Generate fresh seed for this request
     const requestSeed = seed || generateSeed()
     
     console.log("[v0] Analyze request with seed:", requestSeed, {
-      metadataCount: imageMetadata.length,
+      ratingsCount: Object.keys(imageRatings).length,
       language,
     })
 
-    // Validate image metadata
-    if (!Array.isArray(imageMetadata) || imageMetadata.length === 0) {
+    // Validate image ratings
+    if (!imageRatings || Object.keys(imageRatings).length === 0) {
       return NextResponse.json(
-        { error: "No image metadata provided" },
+        { error: "No image ratings provided" },
         { status: 400 }
       )
     }
 
-    // Analyze user preferences from images
-    const preferences = analyzePreferences(imageMetadata as ImageMetadata[])
-    const profile = createPreferenceProfile(preferences)
+    // Create preference profile from image ratings
+    const profile = createPreferenceProfileFromRatings(imageRatings)
 
     // Get top destination matches
     let topDestinations = getTopDestinations(profile, 10)

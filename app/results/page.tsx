@@ -10,7 +10,7 @@ import Link from "next/link"
 import { AnimatedBackgroundElements } from "@/components/animated-background-elements"
 import { useLanguage } from "@/components/language-provider"
 import { getCountryFlagUrl } from "@/lib/destination-image-generator"
-import { generateCategoryImage } from "@/lib/category-image-generator"
+import { getDestinationImage } from "@/lib/destination-images"
 
 interface AnalysisResults {
   countries: Array<{
@@ -42,20 +42,20 @@ export default function ResultsPage() {
           
           // Ensure we have countries array
           if (parsed.countries) {
-            // Generate unique "city" category image for each destination card
+            // Fetch real destination images from Pexels for each destination card
             const countriesWithImages = await Promise.all(
               parsed.countries.map(async (country: any, index: number) => {
                 try {
-                  // Generate unique image for this specific destination card
-                  const uniqueImgUrl = await generateCategoryImage(country.name, "city")
-                  console.log(`[v0] Generated city image for ${country.name}:`, uniqueImgUrl)
+                  // Fetch image for this specific destination from Pexels
+                  const destImageUrl = await getDestinationImage(country.name)
+                  console.log(`[v0] Fetched destination image for ${country.name}:`, destImageUrl)
                   
                   return {
                     ...country,
-                    image: uniqueImgUrl || country.image || "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80",
+                    image: destImageUrl || country.image || "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80",
                   }
                 } catch (imgError) {
-                  console.error(`[v0] Error generating image for ${country.name}:`, imgError)
+                  console.error(`[v0] Error fetching image for ${country.name}:`, imgError)
                   return {
                     ...country,
                     image: country.image || "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80",
@@ -68,14 +68,14 @@ export default function ResultsPage() {
               countries: countriesWithImages,
             })
           } else if (parsed.suggestedCountry) {
-            const uniqueImgUrl = await generateCategoryImage(parsed.suggestedCountry.name, "city")
+            const destImageUrl = await getDestinationImage(parsed.suggestedCountry.name)
             setResults({
               countries: [
                 {
                   name: parsed.suggestedCountry.name,
                   matchPercentage: parsed.suggestedCountry.confidence * 100,
                   reason: parsed.summary,
-                  image: uniqueImgUrl || `https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80`,
+                  image: destImageUrl || `https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80`,
                   tags: parsed.inferredFromImages || [],
                   climate: "Temperate",
                   vibe: "Cultural",

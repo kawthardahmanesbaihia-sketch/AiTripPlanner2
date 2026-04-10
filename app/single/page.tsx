@@ -80,8 +80,8 @@ function SingleModePageContent() {
     : 'Select dates';
 
   const handleAnalyze = async () => {
-    // TODO: Implement analysis for single mode
-    console.log('Analyzing preferences:', preferences);
+    // Navigate to image gallery for preference selection
+    router.push('/gallery');
   };
 
   return (

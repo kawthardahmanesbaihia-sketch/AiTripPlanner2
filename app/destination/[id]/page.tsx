@@ -14,7 +14,8 @@ import { EventsSection } from "@/components/events-section"
 import { WeatherSection } from "@/components/weather-section"
 import { HolidayWarning } from "@/components/holiday-warning"
 import { getCountryCode, getCountryFlagUrl } from "@/lib/destination-image-generator"
-import { generateCategoryImage } from "@/lib/category-image-generator"
+import { getDestinationImage } from "@/lib/destination-images"
+import { fetchPexelsImages } from "@/lib/pexels-service"
 
 interface DestinationData {
   name: string
@@ -96,12 +97,16 @@ export default function DestinationPage() {
 
             const details = detailsResponse.ok ? await detailsResponse.json() : {};
 
-            // Generate category images in parallel
-            const [hotelImg, restaurantImg, activityImg] = await Promise.all([
-              generateCategoryImage(country.name, "hotels"),
-              generateCategoryImage(country.name, "restaurants"),
-              generateCategoryImage(country.name, "activities"),
+            // Fetch category images from Pexels in parallel
+            const [hotelResponse, restaurantResponse, activityResponse] = await Promise.all([
+              fetchPexelsImages(`${country.name} hotel accommodation`, 1),
+              fetchPexelsImages(`${country.name} restaurant dining food`, 1),
+              fetchPexelsImages(`${country.name} activities adventure`, 1),
             ]);
+            
+            const hotelImg = hotelResponse.photos?.[0]?.src?.large || null;
+            const restaurantImg = restaurantResponse.photos?.[0]?.src?.large || null;
+            const activityImg = activityResponse.photos?.[0]?.src?.large || null;
 
             setDestination({
               name: country.name,
