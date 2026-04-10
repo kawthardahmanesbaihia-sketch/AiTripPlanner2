@@ -1,0 +1,301 @@
+/**
+ * Google Gemini API Client
+ * Used for image analysis and AI-generated content
+ */
+
+import { InMemoryCache, generateCacheKey } from "@/lib/cache"
+
+// Initialize cache for Gemini responses (4 hour TTL)
+const geminiCache = new InMemoryCache<any>(14400)
+
+/**
+ * Fetch from Gemini API with fallback model support
+ * Tries gemini-2.0-flash first, falls back to gemini-pro if needed
+ */
+async function callGeminiAPI(prompt: string, apiKey: string): Promise<string | null> {
+  const models = ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-pro"];
+  
+  for (const model of models) {
+    try {
+      console.log(`[Gemini] Attempting with model: ${model}`);
+      
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
+              },
+            ],
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.warn(`[Gemini] Model ${model} failed:`, error.error?.message);
+        continue; // Try next model
+      }
+
+      const data = await response.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      if (content) {
+        console.log(`[Gemini] Success with model: ${model}`);
+        return content;
+      }
+    } catch (error) {
+      console.warn(`[Gemini] Model ${model} error:`, error);
+      continue; // Try next model
+    }
+  }
+  
+  console.error("[Gemini] All models failed");
+  return null;
+}
+
+export interface ImageAnalysisResult {
+  preferences: {
+    adventure: number
+    nature: number
+    beach: number
+    city: number
+    food: number
+    culture: number
+  }
+  mood: string
+  mainThemes: string[]
+}
+
+export interface AIDestinationSummary {
+  whyMatch: string
+  pros: string[]
+  cons: string[]
+  bestFor: string
+  recommendations: string[]
+}
+
+export async function analyzeImages(
+  imageUrls: string[]
+): Promise<ImageAnalysisResult | null> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.warn("[Gemini] API key not configured");
+      return null;
+    }
+
+    if (imageUrls.length === 0) {
+      return null;
+    }
+
+    console.log("[Gemini] Analyzing images:", imageUrls.length);
+
+    const prompt = `Analyze these travel images and identify the user's preferences. Return a JSON object with:
+{
+  "preferences": {
+    "adventure": 0-100,
+    "nature": 0-100,
+    "beach": 0-100,
+    "city": 0-100,
+    "food": 0-100,
+    "culture": 0-100
+  },
+  "mood": "calm/adventurous/cultural/luxury",
+  "mainThemes": ["theme1", "theme2", "theme3"]
+}`;
+
+    const imageParts = imageUrls.map((url) => ({
+      inlineData: {
+        mimeType: "image/jpeg",
+        data: url, // Assuming URLs are already converted to base64
+      },
+    }));
+
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                ...imageParts,
+                {
+                  text: prompt,
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("[Gemini] API error:", error);
+      return null;
+    }
+
+    const data = await response.json();
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!content) {
+      console.error("[Gemini] No content in response");
+      return null;
+    }
+
+    try {
+      // Extract JSON from the response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        console.log("[Gemini] Analysis complete");
+        return result;
+      }
+    } catch (parseError) {
+      console.error("[Gemini] Error parsing response:", parseError);
+      return null;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("[Gemini] Error:", error);
+    return null;
+  }
+}
+
+export async function generateDestinationSummary(
+  destinationName: string,
+  userPreferences: string[],
+  climate: string,
+  activities: string[]
+): Promise<AIDestinationSummary | null> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.warn("[Gemini] API key not configured");
+      return null;
+    }
+
+    // Check cache first
+    const cacheKey = generateCacheKey("summary", destinationName, userPreferences.join(","))
+    const cached = geminiCache.get(cacheKey)
+    if (cached) {
+      console.log("[Gemini] Using cached summary for:", destinationName);
+      return cached
+    }
+
+    console.log("[Gemini] Generating summary for:", destinationName);
+
+    const prompt = `Create a detailed travel recommendation for ${destinationName}. 
+User preferences: ${userPreferences.join(", ")}.
+Climate: ${climate}.
+Available activities: ${activities.join(", ")}.
+
+Generate REALISTIC and SPECIFIC pros and cons based on these preferences. Make them tailored and relevant.
+
+Return ONLY a JSON object with this exact structure (no other text):
+{
+  "whyMatch": "2-3 sentences explaining why this destination specifically matches their stated preferences",
+  "pros": ["specific pro 1 related to their preferences", "specific pro 2", "specific pro 3", "specific pro 4"],
+  "cons": ["realistic concern 1", "realistic concern 2"],
+  "bestFor": "One sentence describing the ideal traveler profile for this destination",
+  "recommendations": ["actionable recommendation 1", "actionable recommendation 2", "actionable recommendation 3"]
+}`;
+
+    const content = await callGeminiAPI(prompt, apiKey);
+    
+    if (!content) {
+      console.error("[Gemini] Failed to get response");
+      return null;
+    }
+
+    try {
+      // Extract JSON from the response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        console.log("[Gemini] Summary generated");
+        // Cache the result
+        geminiCache.set(cacheKey, result)
+        return result;
+      }
+    } catch (parseError) {
+      console.error("[Gemini] Error parsing response:", parseError);
+      return null;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("[Gemini] Error:", error);
+    return null;
+  }
+}
+
+export async function generateActivities(
+  destinationName: string,
+  preferences: string[],
+  climate: string
+): Promise<Array<{ title: string; description: string; duration: string }> | null> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.warn("[Gemini] API key not configured");
+      return null;
+    }
+
+    console.log("[Gemini] Generating activities for:", destinationName);
+
+    const prompt = `Generate 5 travel activities for ${destinationName} based on user preferences: ${preferences.join(", ")}, in a ${climate} climate.
+
+Return ONLY a JSON array with this exact structure (no other text):
+[
+  {
+    "title": "Activity Name",
+    "description": "1-2 sentence description",
+    "duration": "2-3 hours" or "Full day" or "Half day"
+  }
+]`;
+
+    const content = await callGeminiAPI(prompt, apiKey);
+    
+    if (!content) {
+      console.error("[Gemini] Failed to get response");
+      return null;
+    }
+
+    try {
+      // Extract JSON array from the response
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        console.log("[Gemini] Activities generated:", result.length);
+        return result;
+      }
+    } catch (parseError) {
+      console.error("[Gemini] Error parsing response:", parseError);
+      return null;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("[Gemini] Error:", error);
+    return null;
+  }
+}
