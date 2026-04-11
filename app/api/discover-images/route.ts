@@ -29,59 +29,29 @@ export async function POST(request: NextRequest) {
   try {
     const { page = 0, count = 12 } = await request.json()
 
-    const numImages = Math.max(3, Math.min(count, 20))
+    // Cycle through queries based on page
+    const queryIndex = page % DISCOVERY_QUERIES.length
+    const query = DISCOVERY_QUERIES[queryIndex]
 
-    // Cycle through discovery queries based on page
-    const queryIndex = (page * 2) % DISCOVERY_QUERIES.length
-    const selectedQueries = [
-      DISCOVERY_QUERIES[queryIndex],
-      DISCOVERY_QUERIES[(queryIndex + 1) % DISCOVERY_QUERIES.length],
-    ]
+    // Fetch from Pexels API
+    const images = await fetchPexelsImages(query, page, count)
 
-    console.log("[v0] Discovering images:", { page, count: numImages, queries: selectedQueries })
+    // Map to our format - no categories, just discovery
+    const mappedImages = images.map((img: any) => ({
+      url: img.src.large,
+      source: "ai" as const,
+      tags: query.split(" "),
+      mood: "neutral",
+      climate: "temperate",
+      environment: "outdoor",
+      activity_level: "medium",
+      food_style: "casual",
+      category: "discovery",
+    }))
 
-    const imagePromises = selectedQueries.map(async (query) => {
-      try {
-        const results = await fetchPexelsImages(query)
-
-        if (results && results.length > 0) {
-          // Randomize which images we pick to vary results
-          const shuffled = results.sort(() => Math.random() - 0.5)
-          return shuffled.slice(0, Math.ceil(numImages / selectedQueries.length)).map((img) => ({
-            url: img.image,
-            tags: ["travel", "exploration"],
-            mood: "inspirational",
-            climate: "temperate",
-            environment: "mixed",
-            activity_level: "medium",
-            food_style: "casual",
-            category: "discovery",
-          }))
-        }
-
-        return []
-      } catch (error) {
-        console.error("[v0] Error fetching from query:", query, error)
-        return []
-      }
-    })
-
-    const results = await Promise.all(imagePromises)
-    const images = results.flat()
-
-    console.log("[v0] Discovered images:", { page, count: images.length })
-
-    return NextResponse.json({
-      images,
-      count: images.length,
-      source: "pexels",
-      page,
-    })
+    return NextResponse.json({ images: mappedImages })
   } catch (error) {
-    console.error("[v0] Error in discover-images API:", error)
-    return NextResponse.json(
-      { error: "Failed to discover images", images: [] },
-      { status: 500 }
-    )
+    console.error("[v0] Error fetching discovery images:", error)
+    return NextResponse.json({ images: [], error: "Failed to fetch images" }, { status: 500 })
   }
 }

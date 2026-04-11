@@ -24,16 +24,22 @@ interface ImageFeedProps {
   onImagesSelected: (images: FeedImage[]) => void
 }
 
+const ASPECT_RATIOS = [0.75, 0.85, 0.95, 1, 1.1, 1.25, 1.4, 1.6]
+
 export function ImageFeed({ onImagesSelected }: ImageFeedProps) {
   const [images, setImages] = useState<FeedImage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set())
+  const [hasMore, setHasMore] = useState(true)
   const observerTarget = useRef<HTMLDivElement>(null)
   const pageRef = useRef(0)
   const hasLoadedRef = useRef(false)
 
-  // Fetch images from API (no categories)
+  // Fetch images from API
   const fetchImages = useCallback(async (page: number) => {
+    if (isLoading || !hasMore) return
+
+    setIsLoading(true)
     try {
       const response = await fetch("/api/discover-images", {
         method: "POST",
@@ -45,153 +51,144 @@ export function ImageFeed({ onImagesSelected }: ImageFeedProps) {
       if (!response.ok) throw new Error("Failed to fetch images")
       const data = await response.json()
 
-      // Add random aspect ratios for masonry effect
-      return (data.images || []).map((img: FeedImage) => ({
+      // Add random aspect ratios and metadata for masonry effect
+      const newImages = (data.images || []).map((img: FeedImage, idx: number) => ({
         ...img,
-        aspectRatio: [0.75, 0.85, 0.95, 1, 1.1, 1.2, 1.3, 1.5][Math.floor(Math.random() * 8)],
+        aspectRatio: ASPECT_RATIOS[Math.floor(Math.random() * ASPECT_RATIOS.length)],
+        tags: img.tags || [],
+        mood: img.mood || "neutral",
+        climate: img.climate || "temperate",
+        environment: img.environment || "outdoor",
+        activity_level: img.activity_level || "medium",
+        food_style: img.food_style || "casual",
+        category: "discovery",
       }))
+
+      setImages((prev) => [...prev, ...newImages])
+      setHasMore(newImages.length === 12)
     } catch (error) {
       console.error("[v0] Error fetching images:", error)
-      return []
-    }
-  }, [])
-
-  // Load more images
-  const loadMoreImages = useCallback(async () => {
-    if (isLoading) return
-
-    setIsLoading(true)
-
-    try {
-      const newImages = await fetchImages(pageRef.current)
-      setImages((prev) => [...prev, ...newImages])
-      pageRef.current += 1
-    } catch (error) {
-      console.error("[v0] Error loading more images:", error)
+      setHasMore(false)
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, fetchImages])
-
-  // Infinite scroll observer
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !isLoading) {
-          loadMoreImages()
-        }
-      },
-      { threshold: 0.1 }
-    )
-
-    const target = observerTarget.current
-    if (target) observer.observe(target)
-
-    return () => {
-      if (target) observer.unobserve(target)
-    }
-  }, [loadMoreImages, isLoading])
+  }, [isLoading, hasMore])
 
   // Initial load
   useEffect(() => {
     if (!hasLoadedRef.current) {
       hasLoadedRef.current = true
-      loadMoreImages()
+      fetchImages(0)
     }
-  }, [loadMoreImages])
+  }, [fetchImages])
 
-  // Toggle image selection
-  const toggleImageSelection = (imageIndex: number) => {
-    const newSelected = new Set(selectedImages)
-    if (newSelected.has(imageIndex)) {
-      newSelected.delete(imageIndex)
-    } else {
-      newSelected.add(imageIndex)
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !isLoading) {
+          pageRef.current += 1
+          fetchImages(pageRef.current)
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current)
     }
-    setSelectedImages(newSelected)
 
-    // Notify parent of selection
-    const selected = Array.from(newSelected)
-      .map((idx) => images[idx])
-      .filter(Boolean)
-    onImagesSelected(selected)
-  }
+    return () => observer.disconnect()
+  }, [fetchImages, hasMore, isLoading])
+
+  // Toggle selection
+  const toggleSelect = useCallback((index: number) => {
+    setSelectedImages((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(index)) {
+        newSet.delete(index)
+      } else {
+        newSet.add(index)
+      }
+      
+      // Update parent with selected images
+      const selected = Array.from(newSet).map((idx) => images[idx])
+      onImagesSelected(selected)
+      
+      return newSet
+    })
+  }, [images, onImagesSelected])
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8">
+    <div className="w-full">
       {/* Masonry Grid */}
-      <div className="columns-1 gap-4 sm:columns-2 md:columns-3 lg:columns-4">
-        {images.map((image, idx) => (
+      <div className="columns-2 gap-4 px-4 sm:gap-6 sm:px-6 lg:px-8 md:columns-3 lg:columns-4 xl:columns-4">
+        {images.map((image, index) => (
           <motion.div
-            key={`${image.url}-${idx}`}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-            className="mb-4 break-inside-avoid group relative overflow-hidden rounded-2xl cursor-pointer"
-            onClick={() => toggleImageSelection(idx)}
+            key={`${image.url}-${index}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.02 }}
+            className="mb-4 break-inside-avoid sm:mb-6 cursor-pointer group relative overflow-hidden rounded-lg"
+            style={{ aspectRatio: image.aspectRatio }}
+            onClick={() => toggleSelect(index)}
           >
-            {/* Image Container */}
-            <div
-              className="relative overflow-hidden rounded-2xl bg-muted"
-              style={{ aspectRatio: image.aspectRatio || 1 }}
-            >
+            {/* Image */}
+            <div className="relative w-full h-full overflow-hidden bg-muted">
               <img
                 src={image.url}
-                alt="Travel inspiration"
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                alt={`Discovery image ${index + 1}`}
                 loading="lazy"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
 
-              {/* Hover Overlay */}
+              {/* Overlay on hover */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
+
+              {/* Selection checkbox */}
               <motion.div
-                initial={{ opacity: 0 }}
-                whileHover={{ opacity: 1 }}
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={
+                  selectedImages.has(index)
+                    ? { scale: 1, opacity: 1 }
+                    : { scale: 0.8, opacity: 0 }
+                }
                 transition={{ duration: 0.2 }}
-                className="absolute inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center"
+                className="absolute top-3 right-3 sm:top-4 sm:right-4"
               >
-                <motion.div
-                  initial={{ scale: 0 }}
-                  whileHover={{ scale: 1 }}
-                  transition={{ type: "spring", stiffness: 200 }}
-                  className={`w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all ${
-                    selectedImages.has(idx)
-                      ? "border-white bg-primary"
-                      : "border-white bg-transparent"
+                <div
+                  className={`h-6 w-6 sm:h-7 sm:w-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                    selectedImages.has(index)
+                      ? "bg-blue-500 border-blue-500"
+                      : "border-white/80 bg-white/10 backdrop-blur-sm"
                   }`}
                 >
-                  {selectedImages.has(idx) && (
-                    <Check className="w-7 h-7 text-white" />
+                  {selectedImages.has(index) && (
+                    <Check className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                   )}
-                </motion.div>
+                </div>
               </motion.div>
-
-              {/* Selection Indicator Badge */}
-              {selectedImages.has(idx) && (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: "spring" }}
-                  className="absolute top-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary border-2 border-white shadow-lg"
-                >
-                  <Check className="h-5 w-5 text-white" />
-                </motion.div>
-              )}
             </div>
           </motion.div>
         ))}
       </div>
 
-      {/* Loading Indicator */}
-      <div ref={observerTarget} className="flex justify-center py-16">
-        {isLoading && (
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          >
-            <Loader2 className="h-8 w-8 text-primary" />
-          </motion.div>
-        )}
-      </div>
+      {/* Loading indicator */}
+      {isLoading && (
+        <div className="flex justify-center py-8 sm:py-12">
+          <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Infinite scroll trigger */}
+      <div ref={observerTarget} className="h-4" />
+
+      {/* End of feed message */}
+      {!hasMore && images.length > 0 && (
+        <div className="py-8 sm:py-12 text-center">
+          <p className="text-sm sm:text-base text-muted-foreground">No more images to load</p>
+        </div>
+      )}
     </div>
   )
 }
