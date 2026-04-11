@@ -115,71 +115,86 @@ export default function UploadPage() {
       {isAnalyzing && <AIThinkingAnimation />}
 
       <div className="relative z-10">
-        {/* Header */}
+        {/* Hero Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="sticky top-0 bg-background/80 backdrop-blur-md border-b border-border/40 py-6 px-4 sm:px-6 lg:px-8 z-20"
+          className="px-4 sm:px-6 lg:px-8 pt-10 pb-8 sm:pt-14 sm:pb-10 border-b border-border/40 bg-gradient-to-b from-background to-background/50"
         >
           <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-3xl sm:text-4xl font-bold text-balance">
-                  Discover Your Travel Inspiration
-                </h1>
-                <p className="text-muted-foreground text-sm sm:text-base mt-1">
-                  Click images to select your favorites, then tell us about your trip
-                </p>
-              </div>
-              {selectedCount > 0 && (
+            <h1 className="text-4xl sm:text-5xl font-bold text-balance mb-2">
+              Discover Your Travel Style
+            </h1>
+            <p className="text-lg text-muted-foreground text-balance max-w-2xl">
+              Explore millions of travel inspiration images. Click to select your favorites.
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Image Feed */}
+        <div className="py-8 sm:py-12">
+          <ImageFeed onImagesSelected={handleImagesSelected} />
+        </div>
+
+        {/* Bottom Control Panel - Fixed when images selected */}
+        {selectedCount > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed bottom-0 left-0 right-0 border-t border-border/40 bg-background/95 backdrop-blur-md z-50 px-4 sm:px-6 lg:px-8 py-4 sm:py-6"
+          >
+            <div className="max-w-7xl mx-auto">
+              <div className="flex items-center justify-between gap-4">
+                {/* Selection Counter */}
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: "spring", stiffness: 200 }}
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground text-lg font-bold"
+                  className="flex items-center gap-3"
                 >
-                  {selectedCount}
-                </motion.div>
-              )}
-            </div>
-
-            {/* Selection Counter and Input Section */}
-            {selectedCount > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                transition={{ duration: 0.3 }}
-                className="bg-card/50 backdrop-blur-sm border border-border/40 rounded-lg p-4"
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm">
+                    {selectedCount}
+                  </div>
                   <div>
-                    <label className="block text-xs font-semibold mb-2 text-muted-foreground">Budget</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { value: "low", label: "Budget" },
-                        { value: "medium", label: "Standard" },
-                        { value: "high", label: "Premium" },
-                        { value: "luxury", label: "Luxury" },
-                      ].map((option) => (
-                        <motion.button
-                          key={option.value}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => setBudget(option.value)}
-                          className={`px-2 py-1.5 rounded text-sm font-medium transition-all border ${budget === option.value
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border hover:border-primary/50"
-                            }`}
-                        >
-                          {option.label}
-                        </motion.button>
-                      ))}
-                    </div>
+                    <p className="font-semibold text-foreground">
+                      {selectedCount} Image{selectedCount !== 1 ? "s" : ""} Selected
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Tell us about your trip
+                    </p>
+                  </div>
+                </motion.div>
+
+                {/* Controls */}
+                <div className="flex-1 sm:flex-none flex items-center gap-2 sm:gap-3">
+                  {/* Budget Selector */}
+                  <div className="hidden sm:flex gap-2">
+                    {[
+                      { value: "low", label: "Budget" },
+                      { value: "medium", label: "Standard" },
+                      { value: "high", label: "Premium" },
+                      { value: "luxury", label: "Luxury" },
+                    ].map((option) => (
+                      <motion.button
+                        key={option.value}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setBudget(option.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all border ${
+                          budget === option.value
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        {option.label}
+                      </motion.button>
+                    ))}
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold mb-2 text-muted-foreground">Travel Dates</label>
+                  {/* Date Picker */}
+                  <div className="hidden sm:block">
                     {showDatePicker ? (
                       <DateRangePicker
                         onDateRangeChange={(startDate, endDate) => {
@@ -192,49 +207,99 @@ export default function UploadPage() {
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={() => setShowDatePicker(true)}
-                        className="w-full px-3 py-1.5 rounded text-sm border border-border hover:border-primary/50 bg-card text-foreground font-medium transition-all text-left"
+                        className="px-3 py-1.5 rounded-lg text-xs sm:text-sm border border-border hover:border-primary/50 bg-card text-foreground font-medium transition-all text-left whitespace-nowrap"
                       >
                         {travelDates
-                          ? `${travelDates.start.toDateString()} → ${travelDates.end.toDateString()}`
-                          : "Select dates"}
+                          ? `${travelDates.start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} → ${travelDates.end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+                          : "Pick dates"}
                       </motion.button>
                     )}
                   </div>
 
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2 }}
+                  {/* Discover Button */}
+                  <Button
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing || !budget || !travelDates}
+                    size="sm"
+                    className="whitespace-nowrap"
                   >
-                    <Button
-                      onClick={handleAnalyze}
-                      disabled={isAnalyzing || !budget || !travelDates}
-                      size="sm"
-                      className="w-full"
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span className="hidden sm:inline">Analyzing</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Discover</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Mobile Controls (shown below on small screens) */}
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                transition={{ duration: 0.3 }}
+                className="sm:hidden mt-4 pt-4 border-t border-border/40 space-y-3"
+              >
+                <div>
+                  <label className="block text-xs font-semibold mb-2 text-muted-foreground">Budget</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { value: "low", label: "Budget" },
+                      { value: "medium", label: "Standard" },
+                      { value: "high", label: "Premium" },
+                      { value: "luxury", label: "Luxury" },
+                    ].map((option) => (
+                      <motion.button
+                        key={option.value}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setBudget(option.value)}
+                        className={`px-2 py-1.5 rounded text-xs font-medium transition-all border ${
+                          budget === option.value
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        {option.label.split(" ")[0]}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-2 text-muted-foreground">Dates</label>
+                  {showDatePicker ? (
+                    <DateRangePicker
+                      onDateRangeChange={(startDate, endDate) => {
+                        setTravelDates({ start: startDate, end: endDate })
+                        setShowDatePicker(false)
+                      }}
+                    />
+                  ) : (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowDatePicker(true)}
+                      className="w-full px-3 py-2 rounded-lg text-xs border border-border hover:border-primary/50 bg-card text-foreground font-medium transition-all text-left"
                     >
-                      {isAnalyzing ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          Discover
-                        </>
-                      )}
-                    </Button>
-                  </motion.div>
+                      {travelDates
+                        ? `${travelDates.start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} → ${travelDates.end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+                        : "Select dates"}
+                    </motion.button>
+                  )}
                 </div>
               </motion.div>
-            )}
-          </div>
-        </motion.div>
+            </div>
+          </motion.div>
+        )}
 
-        {/* Image Feed */}
-        <div className="py-8">
-          <ImageFeed onImagesSelected={handleImagesSelected} />
-        </div>
+        {/* Bottom Padding to prevent content overlap */}
+        {selectedCount > 0 && <div className="h-32 sm:h-28" />}
       </div>
     </div>
   )

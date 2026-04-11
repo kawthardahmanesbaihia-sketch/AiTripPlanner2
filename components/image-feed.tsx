@@ -3,8 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion } from "framer-motion"
-import { Loader2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Loader2, Check } from "lucide-react"
 
 interface FeedImage {
   url: string
@@ -25,103 +24,60 @@ interface ImageFeedProps {
   onImagesSelected: (images: FeedImage[]) => void
 }
 
-const CATEGORIES = [
-  "nature",
-  "city",
-  "activities",
-  "food",
-  "beaches",
-  "culture",
-  "hidden",
-  "nightlife",
-  "luxury",
-  "adventure",
-]
-
 export function ImageFeed({ onImagesSelected }: ImageFeedProps) {
   const [images, setImages] = useState<FeedImage[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [hasMore, setHasMore] = useState(true)
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set())
   const observerTarget = useRef<HTMLDivElement>(null)
-  const loadedCategoriesRef = useRef<Set<string>>(new Set())
-  const requestCountRef = useRef(0)
+  const pageRef = useRef(0)
+  const hasLoadedRef = useRef(false)
 
-  // Fetch images from API
-  const fetchImagesFromCategory = useCallback(async (category: string) => {
-    if (loadedCategoriesRef.current.has(category)) return []
-
+  // Fetch images from API (no categories)
+  const fetchImages = useCallback(async (page: number) => {
     try {
-      const response = await fetch("/api/generate-images", {
+      const response = await fetch("/api/discover-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, count: 6 }),
+        body: JSON.stringify({ page, count: 12 }),
         cache: "no-store",
       })
 
       if (!response.ok) throw new Error("Failed to fetch images")
       const data = await response.json()
 
-      loadedCategoriesRef.current.add(category)
-
       // Add random aspect ratios for masonry effect
       return (data.images || []).map((img: FeedImage) => ({
         ...img,
-        aspectRatio: [0.75, 0.9, 1, 1.2, 1.5][Math.floor(Math.random() * 5)],
+        aspectRatio: [0.75, 0.85, 0.95, 1, 1.1, 1.2, 1.3, 1.5][Math.floor(Math.random() * 8)],
       }))
     } catch (error) {
-      console.error(`[v0] Error fetching images from ${category}:`, error)
+      console.error("[v0] Error fetching images:", error)
       return []
     }
   }, [])
 
-  // Load more images function
+  // Load more images
   const loadMoreImages = useCallback(async () => {
-    if (isLoading || !hasMore) return
+    if (isLoading) return
 
     setIsLoading(true)
 
     try {
-      // Load images from different categories in sequence
-      const startIdx = requestCountRef.current
-      const categoriesToLoad = CATEGORIES.slice(
-        startIdx,
-        startIdx + 2
-      )
-
-      if (categoriesToLoad.length === 0) {
-        setHasMore(false)
-        setIsLoading(false)
-        return
-      }
-
-      requestCountRef.current += 2
-
-      const newImages: FeedImage[] = []
-      for (const category of categoriesToLoad) {
-        const categoryImages = await fetchImagesFromCategory(category)
-        newImages.push(...categoryImages)
-      }
-
+      const newImages = await fetchImages(pageRef.current)
       setImages((prev) => [...prev, ...newImages])
-
-      if (requestCountRef.current >= CATEGORIES.length) {
-        setHasMore(true) // Allow cycling through categories again
-        requestCountRef.current = 0
-        loadedCategoriesRef.current.clear()
-      }
+      pageRef.current += 1
     } catch (error) {
       console.error("[v0] Error loading more images:", error)
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, hasMore, fetchImagesFromCategory])
+  }, [isLoading, fetchImages])
 
   // Infinite scroll observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !isLoading && hasMore) {
+        if (entries[0].isIntersecting && !isLoading) {
           loadMoreImages()
         }
       },
@@ -134,12 +90,15 @@ export function ImageFeed({ onImagesSelected }: ImageFeedProps) {
     return () => {
       if (target) observer.unobserve(target)
     }
-  }, [loadMoreImages, isLoading, hasMore])
+  }, [loadMoreImages, isLoading])
 
   // Initial load
   useEffect(() => {
-    loadMoreImages()
-  }, [])
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true
+      loadMoreImages()
+    }
+  }, [loadMoreImages])
 
   // Toggle image selection
   const toggleImageSelection = (imageIndex: number) => {
@@ -159,24 +118,27 @@ export function ImageFeed({ onImagesSelected }: ImageFeedProps) {
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full px-4 sm:px-6 lg:px-8">
       {/* Masonry Grid */}
-      <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 px-4 sm:px-6 lg:px-8">
+      <div className="columns-1 gap-4 sm:columns-2 md:columns-3 lg:columns-4">
         {images.map((image, idx) => (
           <motion.div
             key={`${image.url}-${idx}`}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3 }}
-            className="mb-4 break-inside-avoid group relative overflow-hidden rounded-xl cursor-pointer"
+            className="mb-4 break-inside-avoid group relative overflow-hidden rounded-2xl cursor-pointer"
             onClick={() => toggleImageSelection(idx)}
           >
             {/* Image Container */}
-            <div className="relative overflow-hidden rounded-xl bg-muted aspect-auto">
+            <div
+              className="relative overflow-hidden rounded-2xl bg-muted"
+              style={{ aspectRatio: image.aspectRatio || 1 }}
+            >
               <img
                 src={image.url}
                 alt="Travel inspiration"
-                className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-110"
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                 loading="lazy"
               />
 
@@ -185,52 +147,34 @@ export function ImageFeed({ onImagesSelected }: ImageFeedProps) {
                 initial={{ opacity: 0 }}
                 whileHover={{ opacity: 1 }}
                 transition={{ duration: 0.2 }}
-                className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center"
+                className="absolute inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center"
               >
-                <div className="text-white text-center">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    whileHover={{ scale: 1 }}
-                    transition={{ type: "spring", stiffness: 200 }}
-                    className="w-12 h-12 rounded-full border-2 border-white flex items-center justify-center"
-                  >
-                    {selectedImages.has(idx) && (
-                      <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                        <svg
-                          className="w-6 h-6 text-white"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                    )}
-                  </motion.div>
-                  <p className="text-sm font-medium mt-2">
-                    {selectedImages.has(idx) ? "Selected" : "Select"}
-                  </p>
-                </div>
+                <motion.div
+                  initial={{ scale: 0 }}
+                  whileHover={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 200 }}
+                  className={`w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all ${
+                    selectedImages.has(idx)
+                      ? "border-white bg-primary"
+                      : "border-white bg-transparent"
+                  }`}
+                >
+                  {selectedImages.has(idx) && (
+                    <Check className="w-7 h-7 text-white" />
+                  )}
+                </motion.div>
               </motion.div>
 
-              {/* Selection Indicator */}
+              {/* Selection Indicator Badge */}
               {selectedImages.has(idx) && (
-                <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-primary border-2 border-white shadow-lg flex items-center justify-center">
-                  <svg
-                    className="w-5 h-5 text-white"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring" }}
+                  className="absolute top-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary border-2 border-white shadow-lg"
+                >
+                  <Check className="h-5 w-5 text-white" />
+                </motion.div>
               )}
             </div>
           </motion.div>
@@ -238,7 +182,7 @@ export function ImageFeed({ onImagesSelected }: ImageFeedProps) {
       </div>
 
       {/* Loading Indicator */}
-      <div ref={observerTarget} className="flex justify-center py-12">
+      <div ref={observerTarget} className="flex justify-center py-16">
         {isLoading && (
           <motion.div
             animate={{ rotate: 360 }}
@@ -248,30 +192,6 @@ export function ImageFeed({ onImagesSelected }: ImageFeedProps) {
           </motion.div>
         )}
       </div>
-
-      {/* End of Feed Message */}
-      {!hasMore && images.length > 0 && !isLoading && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col items-center justify-center py-12 text-center"
-        >
-          <p className="text-muted-foreground mb-4">
-            End of feed. Keep scrolling for more inspiration!
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              loadedCategoriesRef.current.clear()
-              requestCountRef.current = 0
-              setImages([])
-              loadMoreImages()
-            }}
-          >
-            Refresh Feed
-          </Button>
-        </motion.div>
-      )}
     </div>
   )
 }
