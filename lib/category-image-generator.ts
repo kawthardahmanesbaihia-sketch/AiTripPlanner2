@@ -4,7 +4,7 @@
  * No caching - always generates new images
  */
 
-import { generateTravelImage } from "@/lib/replicate-generator"
+import { fetchPexelsImages } from "@/lib/pexels"
 
 export type ImageCategory = "city" | "nature" | "activities" | "events" | "restaurants" | "hotels"
 
@@ -34,26 +34,26 @@ export async function generateCategoryImage(
   category: ImageCategory
 ): Promise<string | null> {
   try {
-    const prompt = getCategoryPrompt(destination, category)
-    
-    console.log(`[v0] CategoryImageGenerator: Generating ${category} image for ${destination}`)
-    console.log(`[v0] CategoryImageGenerator: Using prompt: ${prompt}`)
-
-    // Each image gets unique identifier to prevent caching
-    const uniqueId = `${destination}-${category}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    
-    const result = await generateTravelImage(uniqueId, prompt)
-    
-    if (result?.url) {
-      console.log(`[v0] CategoryImageGenerator: ✓ Successfully generated ${category} image`)
-      console.log(`[v0] CategoryImageGenerator: URL = ${result.url}`)
-      return result.url
+    const queryMap: Record<ImageCategory, string> = {
+      city: `${destination} city skyline`,
+      nature: `${destination} nature landscape`,
+      activities: `${destination} activities travel`,
+      events: `${destination} festival events`,
+      restaurants: `${destination} food restaurant`,
+      hotels: `${destination} luxury hotel`,
     }
 
-    console.warn(`[v0] CategoryImageGenerator: ✗ Failed to generate ${category} image - returned null`)
+    const query = queryMap[category] || `${destination} travel`
+
+    const images = await fetchPexelsImages(query)
+
+    if (images.length > 0) {
+      return images[0].image
+    }
+
     return null
   } catch (error) {
-    console.error(`[v0] CategoryImageGenerator: Error generating ${category} image:`, error)
+    console.error("[Pexels] Error:", error)
     return null
   }
 }
