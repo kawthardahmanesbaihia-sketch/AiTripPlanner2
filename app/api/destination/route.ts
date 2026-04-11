@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { fetchHotels, fetchRestaurants } from "@/lib/foursquare-client"
 import { generateDestinationSummary, generateActivities } from "@/lib/gemini-client"
-import { getDestinationNegatives, getHotelImage, getRestaurantImage, ensureNonEmpty } from "@/lib/destination-content-generator"
+import { getDestinationNegatives, getHotelImage, getRestaurantImage } from "@/lib/destination-content-generator"
 import { getDestinationImage, getCountryFlagUrl } from "@/lib/destination-image-generator"
-import { fetchEventsByCountry } from "@/lib/eventbrite-client"
-import { generateSeed, selectRandomWithSeed, shuffleArrayWithSeed } from "@/lib/seed-randomizer"
+import { generateSeed, shuffleArrayWithSeed } from "@/lib/seed-randomizer"
 import { generateDynamicHotels, generateDynamicRestaurants, generateDynamicActivities } from "@/lib/dynamic-data-generator"
 
 // Force dynamic rendering - disable caching
@@ -24,29 +23,8 @@ function getDefaultActivities(
   userPreferences: string[],
   seed: number
 ): Array<{ title: string; description: string; duration: string }> {
-  // Use dynamic generator instead of static data
+  // ✅ الحل: حذف الكود الغلط وخلي فقط هذا
   return generateDynamicActivities(countryName, seed, 3)
-}
-
-  return (
-    activityMap[countryName] || [
-      {
-        title: "Cultural Immersion",
-        description: "Experience local culture, traditions, and way of life",
-        duration: "Half day",
-      },
-      {
-        title: "Natural Attractions",
-        description: "Explore scenic landscapes and natural wonders",
-        duration: "Full day",
-      },
-      {
-        title: "Local Cuisine Experience",
-        description: "Taste authentic local dishes and visit traditional restaurants",
-        duration: "2-3 hours",
-      },
-    ]
-  )
 }
 
 function getDefaultSummary(
@@ -85,12 +63,10 @@ export async function POST(request: NextRequest) {
     const body: DestinationRequest & { seed?: number } = await request.json()
     const { countryCode, countryName, climate, activities, userPreferences, seed } = body
 
-    // Generate or use provided seed for consistent randomization
     const requestSeed = seed || generateSeed()
     
     console.log("[v0] Fetching destination details for:", countryName, "with seed:", requestSeed)
 
-    // Fetch hotels, restaurants, Gemini summary, activities, and events in parallel
     const [hotels, restaurants, geminiSummary, generatedActivities, destinationImg] = await Promise.allSettled([
       fetchHotels(countryCode, countryName, requestSeed),
       fetchRestaurants(countryCode, countryName, undefined, requestSeed),
@@ -99,48 +75,49 @@ export async function POST(request: NextRequest) {
       getDestinationImage(countryName),
     ])
 
-    // Use fulfilled values or generate fallbacks
     const hotelsList =
-      hotels.status === "fulfilled" && hotels.value && hotels.value.length > 0
+      hotels.status === "fulfilled" && hotels.value?.length
         ? hotels.value
         : []
+
     const restaurantsList =
-      restaurants.status === "fulfilled" && restaurants.value && restaurants.value.length > 0
+      restaurants.status === "fulfilled" && restaurants.value?.length
         ? restaurants.value
         : []
     
-    // Use Gemini-generated activities if available, otherwise fallback
     const activitiesList = 
-      generatedActivities.status === "fulfilled" && generatedActivities.value && generatedActivities.value.length > 0
+      generatedActivities.status === "fulfilled" && generatedActivities.value?.length
         ? generatedActivities.value
         : getDefaultActivities(countryName, userPreferences, requestSeed)
     
-    // Use Gemini summary if available, otherwise fallback
     const summaryData = 
       geminiSummary.status === "fulfilled" && geminiSummary.value
         ? geminiSummary.value
         : getDefaultSummary(countryName, userPreferences)
     
-    // Get destination image
     const destinationImageUrl =
       destinationImg.status === "fulfilled" && destinationImg.value
         ? destinationImg.value
         : "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80"
 
-    // Generate dynamic hotels, restaurants, and activities specific to this country
     const dynamicHotels = generateDynamicHotels(countryName, requestSeed, 5)
     const dynamicRestaurants = generateDynamicRestaurants(countryName, requestSeed, 5)
 
-    // Ensure we have at least 3 items in each category - use dynamic generation as primary source
-    const shuffledHotels = hotelsList.length > 0 ? hotelsList : dynamicHotels
-    const shuffledRestaurants = restaurantsList.length > 0 ? restaurantsList : dynamicRestaurants
-    const shuffledActivities = activitiesList.length > 0 ? activitiesList : getDefaultActivities(countryName, userPreferences, requestSeed)
+    const finalHotels = shuffleArrayWithSeed(
+      hotelsList.length ? hotelsList : dynamicHotels,
+      requestSeed
+    ).slice(0, 3)
+
+    const finalRestaurants = shuffleArrayWithSeed(
+      restaurantsList.length ? restaurantsList : dynamicRestaurants,
+      requestSeed
+    ).slice(0, 3)
+
+    const finalActivities = shuffleArrayWithSeed(
+      activitiesList,
+      requestSeed
+    ).slice(0, 3)
     
-    const finalHotels = shuffledArrayWithSeed(shuffledHotels, requestSeed).slice(0, 3)
-    const finalRestaurants = shuffleArrayWithSeed(shuffledRestaurants, requestSeed).slice(0, 3)
-    const finalActivities = shuffleArrayWithSeed(shuffledActivities, requestSeed).slice(0, 3)
-    
-    // Add images to hotels and restaurants
     const hotelsWithImages = finalHotels.map((h: any) => ({
       ...h,
       image: h.image || getHotelImage(h.price_level || "$$$"),
@@ -151,7 +128,6 @@ export async function POST(request: NextRequest) {
       image: r.image || getRestaurantImage(),
     }))
 
-    // Get realistic negatives
     const negatives = getDestinationNegatives(countryName)
 
     const result = {
@@ -169,9 +145,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, {
       headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Cache-Control": "no-store",
       }
     })
+
   } catch (error) {
     console.error("[v0] Error fetching destination details:", error)
     return NextResponse.json(

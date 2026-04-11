@@ -1,5 +1,5 @@
 'use client';
-
+import { ImageFeed } from "@/components/image-feed"
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plane } from 'lucide-react';
@@ -79,9 +79,61 @@ function SingleModePageContent() {
       ).toDateString()}`
     : 'Select dates';
 
+  // ✅ FIX هنا (المهم)
   const handleAnalyze = async () => {
-    // TODO: Implement analysis for single mode
-    console.log('Analyzing preferences:', preferences);
+    if (!preferences.budget || !preferences.dateRange) {
+      alert("Please select budget and date");
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+
+      const fakeResults = {
+        countries: [
+          {
+            name: "Japan",
+            matchPercentage: 95,
+            reason: "Perfect mix of culture, food, and modern cities.",
+            image: "",
+            tags: ["culture", "food", "city"],
+            climate: "Temperate",
+            vibe: "Cultural",
+          },
+          {
+            name: "Switzerland",
+            matchPercentage: 90,
+            reason: "Amazing mountains and peaceful nature.",
+            image: "",
+            tags: ["nature", "mountains"],
+            climate: "Cold",
+            vibe: "Relaxing",
+          },
+          {
+            name: "UAE",
+            matchPercentage: 88,
+            reason: "Luxury lifestyle with modern attractions.",
+            image: "",
+            tags: ["luxury", "city"],
+            climate: "Hot",
+            vibe: "Luxury",
+          },
+        ],
+        summary:
+          "These destinations match your preferences based on your budget and travel dates.",
+      };
+
+      // ✅ نحفظ البيانات
+      sessionStorage.setItem("analysisResults", JSON.stringify(fakeResults));
+
+      // ✅ نروح للصفحة
+      router.push("/results");
+
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   return (
@@ -130,17 +182,19 @@ function SingleModePageContent() {
 
               {/* Images Tab */}
               <TabsContent value="images" className="space-y-4">
-                <ImageSelector mode="single" />
+                <ImageFeed onImagesSelected={(imgs) => {
+                  setPreferences((prev: any) => ({
+                    ...prev,
+                    selectedImages: imgs
+                  }))
+                }} />
               </TabsContent>
 
               {/* Details Tab */}
               <TabsContent value="details" className="space-y-4">
-                {/* Budget Selection */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.15 }}
-                >
+
+                {/* Budget */}
+                <motion.div>
                   <label className="block text-sm font-semibold mb-2">Budget</label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
@@ -150,17 +204,14 @@ function SingleModePageContent() {
                     ].map((option) => (
                       <motion.button
                         key={option.value}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
                         onClick={() => handleBudgetSelect(option.value)}
-                        disabled={isUpdating}
                         className="relative"
                       >
                         <div
-                          className={`px-3 py-2 rounded-lg border-2 font-medium transition-all ${
+                          className={`px-3 py-2 rounded-lg border-2 font-medium ${
                             preferences.budget === option.value
                               ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border hover:border-primary/50'
+                              : 'border-border'
                           }`}
                         >
                           {option.label}
@@ -170,47 +221,29 @@ function SingleModePageContent() {
                   </div>
                 </motion.div>
 
-                {/* Date Range */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                >
+                {/* Date */}
+                <motion.div>
                   <label className="block text-sm font-semibold mb-2">Travel Dates</label>
                   {showDatePicker ? (
                     <DateRangePicker onDateRangeChange={handleDateRangeChange} />
                   ) : (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setShowDatePicker(true)}
-                      className="w-full"
-                    >
-                      <div className="w-full px-4 py-3 rounded-lg border-2 border-border hover:border-primary/50 bg-card text-foreground font-medium transition-all text-left">
+                    <button onClick={() => setShowDatePicker(true)} className="w-full">
+                      <div className="w-full px-4 py-3 rounded-lg border-2">
                         {dateRangeDisplay}
                       </div>
-                    </motion.button>
+                    </button>
                   )}
                 </motion.div>
 
                 {/* Interests */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.25 }}
-                >
+                <motion.div>
                   <label className="block text-sm font-semibold mb-3">Interests</label>
                   <div className="flex flex-wrap gap-2">
                     {interests.map((interest) => (
                       <Badge
                         key={interest}
                         onClick={() => handleInterestToggle(interest)}
-                        variant={
-                          preferences.interests?.includes(interest)
-                            ? 'default'
-                            : 'outline'
-                        }
-                        className="cursor-pointer transition-all"
+                        className="cursor-pointer"
                       >
                         {interest}
                       </Badge>
@@ -218,13 +251,8 @@ function SingleModePageContent() {
                   </div>
                 </motion.div>
 
-                {/* Analyze Button */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="pt-4"
-                >
+                {/* Button */}
+                <div className="pt-4">
                   <Button
                     onClick={handleAnalyze}
                     disabled={isUpdating || !preferences.budget || !preferences.dateRange}
@@ -240,7 +268,8 @@ function SingleModePageContent() {
                       'Find Destinations'
                     )}
                   </Button>
-                </motion.div>
+                </div>
+
               </TabsContent>
             </Tabs>
           </Card>
