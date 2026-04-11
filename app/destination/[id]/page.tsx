@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ThumbsUp, ThumbsDown, MapPin, Hotel, Utensils, Activity, ArrowLeft, Sparkles } from "lucide-react"
+import { ThumbsUp, ThumbsDown, MapPin, Hotel, Utensils, Activity, ArrowLeft, Sparkles, Star, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { AnimatedBackgroundElements } from "@/components/animated-background-elements"
 import { useLanguage } from "@/components/language-provider"
@@ -15,6 +15,17 @@ import { WeatherSection } from "@/components/weather-section"
 import { HolidayWarning } from "@/components/holiday-warning"
 import { getCountryCode, getCountryFlagUrl } from "@/lib/destination-image-generator"
 import { generateCategoryImage } from "@/lib/category-image-generator"
+import { InteractiveMap } from "@/components/interactive-map"
+
+interface MapPlace {
+  name: string
+  type: "hotel" | "restaurant"
+  lat: number
+  lng: number
+  address: string
+  rating?: number
+  description?: string
+}
 
 interface DestinationData {
   name: string
@@ -48,6 +59,8 @@ export default function DestinationPage() {
   const [destination, setDestination] = useState<DestinationData | null>(null)
   const [loading, setLoading] = useState(true)
   const [travelDates, setTravelDates] = useState<{ start: string; end: string } | null>(null)
+  const [placesData, setPlacesData] = useState<MapPlace[]>([])
+  const [placesLoading, setPlacesLoading] = useState(false)
   const { t } = useLanguage()
 
   useEffect(() => {
@@ -174,6 +187,35 @@ export default function DestinationPage() {
 
     loadDestination();
   }, [params])
+
+  // Fetch hotels and restaurants
+  useEffect(() => {
+    const fetchPlaces = async () => {
+      if (!destination) return
+
+      setPlacesLoading(true)
+      try {
+        const response = await fetch("/api/places", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ countryName: destination.name, type: "both" }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log("[v0] Fetched places:", data)
+          setPlacesData(data.allPlaces || [])
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching places:", error)
+        setPlacesData([])
+      } finally {
+        setPlacesLoading(false)
+      }
+    }
+
+    fetchPlaces()
+  }, [destination])
 
   if (loading) {
     return (
@@ -357,6 +399,154 @@ export default function DestinationPage() {
             />
           </motion.div>
         )}
+
+        {/* Real Hotels & Restaurants with Map */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="mb-12"
+        >
+          <h2 className="mb-6 text-3xl font-bold">Explore Hotels & Restaurants</h2>
+
+          {/* Map Section */}
+          {placesData.length > 0 ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+              className="mb-8"
+            >
+              <InteractiveMap
+                locations={placesData}
+                centerLat={20}
+                centerLng={0}
+                zoom={4}
+              />
+            </motion.div>
+          ) : placesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              >
+                <Sparkles className="h-8 w-8 text-primary" />
+              </motion.div>
+            </div>
+          ) : null}
+
+          {/* Real Hotels Grid */}
+          {placesData.filter((p) => p.type === "hotel").length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="mb-12"
+            >
+              <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold">
+                <Hotel className="h-6 w-6 text-primary" />
+                Real Hotels Near {destination.name}
+              </h3>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {placesData
+                  .filter((p) => p.type === "hotel")
+                  .slice(0, 6)
+                  .map((hotel, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.35 + index * 0.05 }}
+                    >
+                      <Card className="border-2 bg-card/50 backdrop-blur-sm p-4 hover:shadow-lg transition-all h-full flex flex-col">
+                        <div className="mb-3 flex items-start justify-between">
+                          <h4 className="font-bold text-base flex-1 line-clamp-2">{hotel.name}</h4>
+                          {hotel.rating && (
+                            <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                              <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                              <span className="text-sm font-semibold">{hotel.rating}</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2 flex items-start gap-1">
+                          <MapPin className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">{hotel.address}</span>
+                        </p>
+                        <p className="text-sm text-muted-foreground mb-3 flex-grow line-clamp-2">{hotel.description}</p>
+                        <Button size="sm" variant="outline" className="w-full text-xs" asChild>
+                          <a
+                            href={`https://maps.google.com/?q=${hotel.lat},${hotel.lng}(${encodeURIComponent(hotel.name)})`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-1"
+                          >
+                            View on Maps
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </Button>
+                      </Card>
+                    </motion.div>
+                  ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Real Restaurants Grid */}
+          {placesData.filter((p) => p.type === "restaurant").length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mb-12"
+            >
+              <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold">
+                <Utensils className="h-6 w-6 text-primary" />
+                Real Restaurants Near {destination.name}
+              </h3>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {placesData
+                  .filter((p) => p.type === "restaurant")
+                  .slice(0, 6)
+                  .map((restaurant, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 + index * 0.05 }}
+                    >
+                      <Card className="border-2 bg-card/50 backdrop-blur-sm p-4 hover:shadow-lg transition-all h-full flex flex-col">
+                        <div className="mb-3 flex items-start justify-between">
+                          <h4 className="font-bold text-base flex-1 line-clamp-2">{restaurant.name}</h4>
+                          {restaurant.rating && (
+                            <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                              <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                              <span className="text-sm font-semibold">{restaurant.rating}</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2 flex items-start gap-1">
+                          <MapPin className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">{restaurant.address}</span>
+                        </p>
+                        <p className="text-sm text-muted-foreground mb-3 flex-grow line-clamp-2">{restaurant.description}</p>
+                        <Button size="sm" variant="outline" className="w-full text-xs" asChild>
+                          <a
+                            href={`https://maps.google.com/?q=${restaurant.lat},${restaurant.lng}(${encodeURIComponent(restaurant.name)})`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-1"
+                          >
+                            View on Maps
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </Button>
+                      </Card>
+                    </motion.div>
+                  ))}
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
 
         {/* Hotels */}
         <motion.div

@@ -5,23 +5,12 @@ import { motion } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowRight, Sparkles, TrendingUp, Hotel, Utensils, MapPin, Star } from "lucide-react"
+import { ArrowRight, Sparkles, TrendingUp } from "lucide-react"
 import Link from "next/link"
 import { AnimatedBackgroundElements } from "@/components/animated-background-elements"
 import { useLanguage } from "@/components/language-provider"
 import { getCountryFlagUrl } from "@/lib/destination-image-generator"
 import { generateCategoryImage } from "@/lib/category-image-generator"
-import { InteractiveMap } from "@/components/interactive-map"
-
-interface MapPlace {
-  name: string
-  type: "hotel" | "restaurant"
-  lat: number
-  lng: number
-  address: string
-  rating?: number
-  description?: string
-}
 
 interface AnalysisResults {
   countries: Array<{
@@ -38,11 +27,8 @@ interface AnalysisResults {
 
 export default function ResultsPage() {
   const [results, setResults] = useState<AnalysisResults | null>(null)
-  const [selectedCountry, setSelectedCountry] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [imageLoading, setImageLoading] = useState<Record<string, boolean>>({})
-  const [placesLoading, setPlacesLoading] = useState(false)
-  const [placesData, setPlacesData] = useState<MapPlace[]>([])
   const { t } = useLanguage()
 
   useEffect(() => {
@@ -106,37 +92,7 @@ export default function ResultsPage() {
     loadData()
   }, [])
 
-  // Fetch hotels and restaurants when country is selected
-  useEffect(() => {
-    const fetchPlaces = async () => {
-      if (selectedCountry === null || !results) return
 
-      const selectedCountryName = results.countries[selectedCountry]?.name
-      if (!selectedCountryName) return
-
-      setPlacesLoading(true)
-      try {
-        const response = await fetch("/api/places", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ countryName: selectedCountryName, type: "both" }),
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          console.log("[v0] Fetched places:", data)
-          setPlacesData(data.allPlaces || [])
-        }
-      } catch (error) {
-        console.error("[v0] Error fetching places:", error)
-        setPlacesData([])
-      } finally {
-        setPlacesLoading(false)
-      }
-    }
-
-    fetchPlaces()
-  }, [selectedCountry, results])
 
   if (isLoading) {
     return (
@@ -202,16 +158,8 @@ export default function ResultsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.15, duration: 0.6 }}
               whileHover={{ y: -8 }}
-              onClick={() => setSelectedCountry(index)}
-              className="cursor-pointer"
             >
-              <Card
-                className={`h-full overflow-hidden border-2 transition-all duration-300 ${
-                  selectedCountry === index
-                    ? "border-primary shadow-xl shadow-primary/50 ring-2 ring-primary"
-                    : "border-border hover:border-primary/50"
-                }`}
-              >
+              <Card className="h-full overflow-hidden border-2 border-border hover:border-primary/50 transition-all duration-300">
                 {/* Country Image with Flag Overlay */}
                 <div className="relative h-48 overflow-hidden bg-gradient-to-br from-primary/20 to-secondary">
                   <img
@@ -279,8 +227,7 @@ export default function ResultsPage() {
                     </div>
                   )}
 
-                  <motion.div whileHover={{ x: 4 }} whileTap={{ scale: 0.95 }}>
-                    <Button
+                  <Button
                       asChild
                       className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                     >
@@ -289,154 +236,11 @@ export default function ResultsPage() {
                         <ArrowRight className="h-4 w-4" />
                       </Link>
                     </Button>
-                  </motion.div>
                 </div>
               </Card>
             </motion.div>
           ))}
         </div>
-
-        {/* Selected Country Details */}
-        {selectedCountry !== null && results && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mb-16"
-          >
-            <div className="mb-8">
-              <h2 className="mb-6 text-3xl font-bold">
-                Hotels & Restaurants in {results.countries[selectedCountry]?.name}
-              </h2>
-
-              {/* Map Section */}
-              {placesData.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.4 }}
-                  className="mb-8"
-                >
-                  <InteractiveMap
-                    locations={placesData}
-                    centerLat={20}
-                    centerLng={0}
-                    zoom={4}
-                  />
-                </motion.div>
-              )}
-
-              {placesLoading && (
-                <div className="flex items-center justify-center py-12">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  >
-                    <Sparkles className="h-8 w-8 text-primary" />
-                  </motion.div>
-                </div>
-              )}
-
-              {!placesLoading && placesData.length === 0 && (
-                <Card className="border-2 bg-card/50 p-6 text-center">
-                  <p className="text-muted-foreground">
-                    Unable to fetch places. Please try again or explore the destination page.
-                  </p>
-                </Card>
-              )}
-            </div>
-
-            {/* Hotels Grid */}
-            {placesData.filter((p) => p.type === "hotel").length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="mb-12"
-              >
-                <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold">
-                  <Hotel className="h-6 w-6 text-primary" />
-                  Hotels
-                </h3>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {placesData
-                    .filter((p) => p.type === "hotel")
-                    .slice(0, 6)
-                    .map((hotel, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5 + index * 0.1 }}
-                      >
-                        <Card className="border-2 bg-card/50 backdrop-blur-sm p-4 hover:shadow-lg transition-all">
-                          <div className="mb-2 flex items-start justify-between">
-                            <h4 className="font-bold text-lg flex-1">{hotel.name}</h4>
-                            {hotel.rating && (
-                              <div className="flex items-center gap-1">
-                                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                                <span className="text-sm font-semibold">{hotel.rating}</span>
-                              </div>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground mb-2 flex items-start gap-1">
-                            <MapPin className="h-3 w-3 flex-shrink-0 mt-0.5" />
-                            {hotel.address}
-                          </p>
-                          <p className="text-sm text-muted-foreground">{hotel.description}</p>
-                        </Card>
-                      </motion.div>
-                    ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Restaurants Grid */}
-            {placesData.filter((p) => p.type === "restaurant").length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="mb-12"
-              >
-                <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold">
-                  <Utensils className="h-6 w-6 text-primary" />
-                  Restaurants
-                </h3>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {placesData
-                    .filter((p) => p.type === "restaurant")
-                    .slice(0, 6)
-                    .map((restaurant, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.6 + index * 0.1 }}
-                      >
-                        <Card className="border-2 bg-card/50 backdrop-blur-sm p-4 hover:shadow-lg transition-all">
-                          <div className="mb-2 flex items-start justify-between">
-                            <h4 className="font-bold text-lg flex-1">{restaurant.name}</h4>
-                            {restaurant.rating && (
-                              <div className="flex items-center gap-1">
-                                <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                                <span className="text-sm font-semibold">{restaurant.rating}</span>
-                              </div>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground mb-2 flex items-start gap-1">
-                            <MapPin className="h-3 w-3 flex-shrink-0 mt-0.5" />
-                            {restaurant.address}
-                          </p>
-                          <p className="text-sm text-muted-foreground">{restaurant.description}</p>
-                        </Card>
-                      </motion.div>
-                    ))}
-                </div>
-              </motion.div>
-            )}
-          </motion.div>
-        )}
 
         {/* AI Summary */}
         {results.summary && (
