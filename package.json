@@ -74,8 +74,3 @@
     "typescript": "^5"
   }
 }
-"scripts": {
-  "install": "npm install",
-  "build": "next build",
-  "dev": "next dev"
-}
