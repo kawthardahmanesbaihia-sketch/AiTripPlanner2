@@ -27,7 +27,6 @@ interface AnalysisResults {
 
 export default function ResultsPage() {
   const [results, setResults] = useState<AnalysisResults | null>(null)
-  const [selectedCountry, setSelectedCountry] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [imageLoading, setImageLoading] = useState<Record<string, boolean>>({})
   const { t } = useLanguage()
@@ -93,6 +92,8 @@ export default function ResultsPage() {
     loadData()
   }, [])
 
+
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -157,16 +158,8 @@ export default function ResultsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.15, duration: 0.6 }}
               whileHover={{ y: -8 }}
-              onClick={() => setSelectedCountry(index)}
-              className="cursor-pointer"
             >
-              <Card
-                className={`h-full overflow-hidden border-2 transition-all duration-300 ${
-                  selectedCountry === index
-                    ? "border-primary shadow-xl shadow-primary/50 ring-2 ring-primary"
-                    : "border-border hover:border-primary/50"
-                }`}
-              >
+              <Card className="h-full overflow-hidden border-2 border-border hover:border-primary/50 transition-all duration-300">
                 {/* Country Image with Flag Overlay */}
                 <div className="relative h-48 overflow-hidden bg-gradient-to-br from-primary/20 to-secondary">
                   <img
@@ -234,8 +227,7 @@ export default function ResultsPage() {
                     </div>
                   )}
 
-                  <motion.div whileHover={{ x: 4 }} whileTap={{ scale: 0.95 }}>
-                    <Button
+                  <Button
                       asChild
                       className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                     >
@@ -244,7 +236,6 @@ export default function ResultsPage() {
                         <ArrowRight className="h-4 w-4" />
                       </Link>
                     </Button>
-                  </motion.div>
                 </div>
               </Card>
             </motion.div>
