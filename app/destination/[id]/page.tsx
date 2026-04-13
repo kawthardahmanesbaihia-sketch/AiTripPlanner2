@@ -27,6 +27,11 @@ interface MapPlace {
   description?: string
 }
 
+interface CountryCoordinates {
+  lat: number
+  lng: number
+}
+
 interface DestinationData {
   name: string
   matchPercentage: number
@@ -61,6 +66,7 @@ export default function DestinationPage() {
   const [travelDates, setTravelDates] = useState<{ start: string; end: string } | null>(null)
   const [placesData, setPlacesData] = useState<MapPlace[]>([])
   const [placesLoading, setPlacesLoading] = useState(false)
+  const [countryCoordinates, setCountryCoordinates] = useState<CountryCoordinates>({ lat: 20, lng: 0 })
   const { t } = useLanguage()
 
   useEffect(() => {
@@ -187,6 +193,69 @@ export default function DestinationPage() {
 
     loadDestination();
   }, [params])
+
+  // Geocode country to get coordinates
+  useEffect(() => {
+    const geocodeCountry = async () => {
+      if (!destination) return
+
+      try {
+        // Use Geoapify geocoding to get country center
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?` +
+          `country=${encodeURIComponent(destination.name)}&` +
+          `format=json&` +
+          `limit=1`,
+          { next: { revalidate: 86400 } }
+        )
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.length > 0) {
+            const coords = {
+              lat: parseFloat(data[0].lat),
+              lng: parseFloat(data[0].lon),
+            }
+            console.log("[v0] Geocoded country coordinates:", coords)
+            setCountryCoordinates(coords)
+            return
+          }
+        }
+      } catch (error) {
+        console.error("[v0] Geocoding error:", error)
+      }
+
+      // Fallback to country mapping if geocoding fails
+      const countryCoords: Record<string, CountryCoordinates> = {
+        France: { lat: 46.2276, lng: 2.2137 },
+        Italy: { lat: 41.8719, lng: 12.5674 },
+        Spain: { lat: 40.463667, lng: -3.74922 },
+        Germany: { lat: 51.1657, lng: 10.4515 },
+        Japan: { lat: 36.2048, lng: 138.2529 },
+        Thailand: { lat: 15.87, lng: 100.9925 },
+        Mexico: { lat: 23.6345, lng: -102.5528 },
+        Brazil: { lat: -14.2350, lng: -51.9253 },
+        "United States": { lat: 37.0902, lng: -95.7129 },
+        Canada: { lat: 56.1304, lng: -106.3468 },
+        "United Kingdom": { lat: 55.3781, lng: -3.436 },
+        Australia: { lat: -25.2744, lng: 133.7751 },
+        India: { lat: 20.5937, lng: 78.9629 },
+        Egypt: { lat: 26.8206, lng: 30.8025 },
+        Greece: { lat: 39.074208, lng: 21.824312 },
+        Portugal: { lat: 39.3999, lng: -8.2245 },
+        Turkey: { lat: 38.9637, lng: 35.2433 },
+        Vietnam: { lat: 14.0583, lng: 108.2772 },
+        Indonesia: { lat: -0.7893, lng: 113.9213 },
+        "South Korea": { lat: 35.9078, lng: 127.7669 },
+      }
+
+      if (countryCoords[destination.name]) {
+        setCountryCoordinates(countryCoords[destination.name])
+      }
+    }
+
+    geocodeCountry()
+  }, [destination])
 
   // Fetch hotels and restaurants
   useEffect(() => {
@@ -419,9 +488,9 @@ export default function DestinationPage() {
             >
               <InteractiveMap
                 locations={placesData}
-                centerLat={20}
-                centerLng={0}
-                zoom={4}
+                centerLat={countryCoordinates.lat}
+                centerLng={countryCoordinates.lng}
+                zoom={8}
               />
             </motion.div>
           ) : placesLoading ? (
